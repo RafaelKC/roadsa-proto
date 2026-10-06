@@ -36,6 +36,41 @@ function Segmented<T extends string>({ value, options, onChange }: {
   );
 }
 
+function AddPilot({ onAdd }: { onAdd: (name: string, maxHours: number, maxKm: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [maxHours, setMaxHours] = useState("6");
+  const [maxKm, setMaxKm] = useState("450");
+
+  function reset() { setOpen(false); setName(""); setMaxHours("6"); setMaxKm("450"); }
+  function confirm() {
+    if (!name.trim()) return;
+    onAdd(name.trim(), Math.max(1, parseInt(maxHours) || 6), Math.max(50, parseInt(maxKm) || 450));
+    reset();
+  }
+
+  if (!open) {
+    return (
+      <Button variant="outline" className="w-full border-dashed text-primary" onClick={() => setOpen(true)}>
+        <Plus /> Adicionar piloto
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-muted p-3">
+      <Input autoFocus placeholder="Nome do piloto" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="flex gap-2">
+        <Input placeholder="Horas máx./dia" inputMode="numeric" value={maxHours} onChange={(e) => setMaxHours(e.target.value)} />
+        <Input placeholder="Km máx./dia" inputMode="numeric" value={maxKm} onChange={(e) => setMaxKm(e.target.value)} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={reset}>Cancelar</Button>
+        <Button size="sm" onClick={confirm}>Adicionar</Button>
+      </div>
+    </div>
+  );
+}
+
 function AddDestination({ onAdd }: { onAdd: (name: string, days: number) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -173,8 +208,31 @@ export function TripForm({ trip, onChange, totalDays, onGenerate }: Props) {
 
       <Separator />
 
+      <section className="space-y-2">
+        <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Experiência</Label>
+        <Segmented
+          value={trip.beginnerMode ? "sim" : "nao"}
+          options={[{ value: "nao", label: "Já viajei assim" }, { value: "sim", label: "Primeira viagem longa" }]}
+          onChange={(v) => set({ beginnerMode: v === "sim" })}
+        />
+        {trip.beginnerMode && (
+          <p className="text-xs text-muted-foreground">
+            Modo iniciante ativado: termos técnicos do roteiro ficam com explicação extra e sugerimos abaixo um ritmo
+            confortável pra quem nunca fez uma viagem longa.
+          </p>
+        )}
+      </section>
+
+      <Separator />
+
       <section className="space-y-4">
         <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Restrições da viagem</Label>
+        {trip.beginnerMode && (
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-accent px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">Sugestão pra começar: 5h e 350km por dia.</p>
+            <Button size="sm" variant="outline" onClick={() => set({ maxHours: 5, maxKm: 350 })}>Usar sugestão</Button>
+          </div>
+        )}
         <div className="space-y-2">
           <Label className="text-muted-foreground">Horas máx. de direção / dia</Label>
           <div className="flex items-center gap-3 rounded-lg bg-muted px-3 py-3">
@@ -208,6 +266,50 @@ export function TripForm({ trip, onChange, totalDays, onGenerate }: Props) {
             &quot;Terra&quot; é só preferência de exibição neste protótipo — a rota real ainda usa vias pavimentadas.
           </p>
         </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+          Perfis de piloto (opcional)
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Moto/piloto com resistência diferente no grupo? Cadastre o limite de cada um — o roteiro sempre usa o mais
+          conservador.
+        </p>
+        {trip.pilots.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {trip.pilots.map((p) => (
+              <div key={p.id} className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">até {p.maxHours}h / {p.maxKm}km por dia</div>
+                </div>
+                <Button
+                  size="icon-xs" variant="ghost" aria-label="Remover piloto"
+                  className="hover:text-destructive"
+                  onClick={() => set({ pilots: trip.pilots.filter((x) => x.id !== p.id) })}
+                ><X /></Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <AddPilot onAdd={(name, maxHours, maxKm) => set({ pilots: [...trip.pilots, { id: `${Date.now()}`, name, maxHours, maxKm }] })} />
+      </section>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Receber alertas por</Label>
+        <Segmented
+          value={trip.notifyChannel}
+          options={[{ value: "app", label: "App" }, { value: "whatsapp", label: "WhatsApp" }, { value: "telegram", label: "Telegram" }]}
+          onChange={(notifyChannel) => set({ notifyChannel })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Protótipo: só salva a preferência — nenhum alerta é enviado de fato.
+        </p>
       </section>
 
       <Separator />

@@ -3,6 +3,12 @@
 
 export type Destination = { name: string; days: number };
 
+// Perfil individual de piloto/moto — grupos com resistência diferente por pessoa
+// podem cadastrar mais de um; o limite efetivo do grupo é sempre o mais conservador.
+export type PilotProfile = { id: string; name: string; maxHours: number; maxKm: number };
+
+export type NotifyChannel = "app" | "whatsapp" | "telegram";
+
 export type TripState = {
   origin: string;
   destinations: Destination[];
@@ -10,6 +16,9 @@ export type TripState = {
   maxKm: number;
   startDate: string; // YYYY-MM-DD
   roadType: { surface: "asfalto" | "terra"; style: "rapida" | "cenica" };
+  pilots: PilotProfile[];
+  notifyChannel: NotifyChannel;
+  beginnerMode: boolean;
 };
 
 export type TravelItem = {
@@ -21,6 +30,9 @@ export type TravelItem = {
   hours: number;
   isIntermediateStop: boolean;
   mapIndex: number;
+  // Placeholder de demo para alerta de condição de estrada em tempo real (pedido de entrevista).
+  // Determinístico por hash do trecho — a integração real viria de um provedor de trânsito/clima.
+  roadAlert: boolean;
 };
 export type StayItem = {
   type: "stay";
@@ -53,6 +65,9 @@ export const DEFAULT_TRIP: TripState = {
   maxKm: 500,
   startDate: "2026-10-12",
   roadType: { surface: "asfalto", style: "rapida" },
+  pilots: [],
+  notifyChannel: "app",
+  beginnerMode: false,
 };
 
 const DIST_TABLE: Record<string, number> = {
@@ -94,11 +109,19 @@ export function buildItinerary(state: TripState): Itinerary {
   let totalKm = 0;
   let totalHours = 0;
 
+  // Com mais de um piloto/moto cadastrado, o limite do grupo é o mais conservador entre eles.
+  const groupMaxHours = state.pilots.length
+    ? Math.min(state.maxHours, ...state.pilots.map((p) => p.maxHours))
+    : state.maxHours;
+  const groupMaxKm = state.pilots.length
+    ? Math.min(state.maxKm, ...state.pilots.map((p) => p.maxKm))
+    : state.maxKm;
+
   for (let i = 0; i < chain.length - 1; i++) {
     const from = chain[i];
     const to = chain[i + 1];
     const km = getDistance(from, to);
-    const effectiveMaxKm = Math.max(80, Math.min(state.maxKm, state.maxHours * SPEED_KMH));
+    const effectiveMaxKm = Math.max(80, Math.min(groupMaxKm, groupMaxHours * SPEED_KMH));
     const numDays = Math.max(1, Math.ceil(km / effectiveMaxKm));
     const perDayKm = km / numDays;
     const waypoints = getWaypoints(from, to, numDays - 1);
@@ -116,6 +139,7 @@ export function buildItinerary(state: TripState): Itinerary {
         type: "travel", day: dayCounter, from: segFrom, to: segTo,
         km: segKm, hours: segHours, isIntermediateStop: !isLast,
         mapIndex: mapStops.length - 1,
+        roadAlert: hashStr(segFrom + "|" + segTo) % 7 === 0,
       });
       dayCounter++;
       segFrom = segTo;

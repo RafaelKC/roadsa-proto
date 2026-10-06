@@ -22,6 +22,12 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
+const channelLabel: Record<TripState["notifyChannel"], string> = {
+  app: "Alertas no app",
+  whatsapp: "Alertas via WhatsApp",
+  telegram: "Alertas via Telegram",
+};
+
 export function ItineraryHeader({ trip, itinerary, onBack }: Pick<Props, "trip" | "itinerary" | "onBack">) {
   const { totals } = itinerary;
   const end = addDaysToDate(trip.startDate, totals.days);
@@ -30,7 +36,11 @@ export function ItineraryHeader({ trip, itinerary, onBack }: Pick<Props, "trip" 
       <Button variant="outline" onClick={onBack}><ArrowLeft /> Ajustar viagem</Button>
       <div className="min-w-44 flex-1">
         <div className="text-base font-bold">{[trip.origin, ...trip.destinations.map((d) => d.name)].join(" → ")}</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{formatDatePt(trip.startDate)} – {formatDatePt(end)}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{formatDatePt(trip.startDate)} – {formatDatePt(end)}</span>
+          <Badge variant="outline">{channelLabel[trip.notifyChannel]}</Badge>
+          {trip.beginnerMode && <Badge variant="secondary">Modo iniciante</Badge>}
+        </div>
       </div>
       <Stat value={`${totals.km.toLocaleString("pt-BR")} km`} label="distância" />
       <Stat value={`${totals.days} dias`} label="dias" />
@@ -54,9 +64,14 @@ export function Timeline({ itinerary, activeIndex, onSelect }: Pick<Props, "itin
               <div className="text-[10px] font-extrabold tracking-wide text-primary uppercase">Dia {it.day}</div>
               <div className="mt-1 text-sm font-bold">{it.from.split(",")[0]} → {it.to.split(",")[0]}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">{it.km} km · ~{it.hours}h de direção</div>
-              {it.isIntermediateStop && (
-                <Badge variant="secondary" className="mt-2">Parada sugerida — trecho excede o limite diário</Badge>
-              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {it.isIntermediateStop && (
+                  <Badge variant="secondary">Parada sugerida — trecho excede o limite diário</Badge>
+                )}
+                {it.roadAlert && (
+                  <Badge variant="destructive">Alerta de condição da estrada (estimativa)</Badge>
+                )}
+              </div>
             </button>
           );
         }
