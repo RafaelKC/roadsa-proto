@@ -7,15 +7,24 @@ export type SavedTrip = { id: string; title: string; trip: TripState };
 
 export function blankTrip(): TripState {
   return {
-    origin: "Curitiba, PR",
-    destinations: [{ name: "Florianópolis, SC", days: 2 }],
+    origin: "",
+    roundTrip: false,
+    destinations: [],
     maxHours: 6,
     maxKm: 450,
     startDate: new Date().toLocaleDateString("sv-SE"),
     roadType: { surface: "asfalto", style: "rapida" },
     pilots: [],
     notifyChannel: "app",
+    notifyLevel: "essenciais",
     beginnerMode: false,
+    vehicle: "carro",
+    travelers: 1,
+    avoidTolls: false,
+    restEveryHours: 0,
+    stopNeeds: [],
+    departureTime: "08:00",
+    emergency: { name: "", phone: "", checkIn: false },
   };
 }
 
@@ -29,7 +38,9 @@ export const SAMPLE_SAVED_TRIPS: SavedTrip[] = [
     id: "serra-gaucha",
     title: "Serra Gaúcha em família",
     trip: {
+      ...blankTrip(),
       origin: "Curitiba, PR",
+      roundTrip: true,
       destinations: [
         { name: "Gramado, RS", days: 3 },
         { name: "Canela, RS", days: 2 },
@@ -41,13 +52,18 @@ export const SAMPLE_SAVED_TRIPS: SavedTrip[] = [
       pilots: [],
       notifyChannel: "whatsapp",
       beginnerMode: true,
+      travelers: 4,
+      restEveryHours: 2,
+      stopNeeds: ["bebe", "seguro"],
     },
   },
   {
     id: "nordeste-moto",
     title: "Nordeste com o motoclube",
     trip: {
+      ...blankTrip(),
       origin: "Salvador, BA",
+      roundTrip: true,
       destinations: [
         { name: "Praia do Forte, BA", days: 2 },
         { name: "Jericoacoara, CE", days: 4 },
@@ -61,7 +77,9 @@ export const SAMPLE_SAVED_TRIPS: SavedTrip[] = [
         { id: "p2", name: "Mariana", maxHours: 5, maxKm: 350 },
       ],
       notifyChannel: "telegram",
-      beginnerMode: false,
+      vehicle: "moto",
+      travelers: 2,
+      emergency: { name: "Contato de confiança", phone: "", checkIn: true },
     },
   },
 ];

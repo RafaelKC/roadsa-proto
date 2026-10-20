@@ -88,8 +88,18 @@ export function TripMap({ stops, legs, activeIndex = -1, routeStyle, showControl
 
   const bumpGeo = useCallback(() => setGeoTick((t) => t + 1), []);
   // geoTick é dependência de propósito: recalcula as coordenadas quando uma geocodificação resolve.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const coords = useMemo(() => stops.map((s) => getCoords(s.name, bumpGeo)), [stops, bumpGeo, geoTick]);
+  const coords = useMemo(() => {
+    const out = stops.map((s) => (s.generic ? null : getCoords(s.name, bumpGeo)));
+    // paradas genéricas: posição interpolada entre as cidades reais vizinhas (nada de geocodificar "Parada intermediária")
+    return out.map((c, i) => {
+      if (c) return c;
+      let a = i - 1; while (!out[a]) a--;
+      let b = i + 1; while (!out[b]) b++;
+      const t = (i - a) / (b - a);
+      return [out[a]![0] + (out[b]![0] - out[a]![0]) * t, out[a]![1] + (out[b]![1] - out[a]![1]) * t] as LngLat;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stops, bumpGeo, geoTick]);
 
   // 1) cria o mapa uma vez
   useEffect(() => {

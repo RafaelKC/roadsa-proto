@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { StartStep } from "@/components/planner/start-step";
 import { TripForm } from "@/components/planner/trip-form";
 import { ItineraryHeader, Timeline } from "@/components/planner/itinerary-view";
 import { TripList } from "@/components/planner/trip-list";
@@ -17,7 +18,7 @@ function titleFor(trip: TripState): string {
 export function Planner() {
   const [trips, setTrips] = useState<SavedTrip[]>(SAMPLE_SAVED_TRIPS);
   const [trip, setTrip] = useState<TripState>(blankTrip());
-  const [view, setView] = useState<"list" | "form" | "itinerary">("list");
+  const [view, setView] = useState<"list" | "start" | "form" | "itinerary">("list");
   const [activeIndex, setActiveIndex] = useState(-1);
   const editingId = useRef<string | null>(null);
 
@@ -25,7 +26,7 @@ export function Planner() {
   const legs = useMemo(() => legsInfo(itinerary.items), [itinerary]);
 
   function openList() { setView("list"); }
-  function createTrip() { editingId.current = null; setTrip(blankTrip()); setView("form"); }
+  function createTrip() { editingId.current = null; setTrip(blankTrip()); setView("start"); }
   function openSavedTrip(saved: SavedTrip) { editingId.current = saved.id; setTrip(saved.trip); setActiveIndex(-1); setView("itinerary"); }
   function generate() {
     setActiveIndex(-1);
@@ -43,9 +44,11 @@ export function Planner() {
 
   const step = view === "list"
     ? { n: 1, title: "Minhas rotas" }
+    : view === "start"
+    ? { n: 2, title: "Origem e tipo de rota" }
     : view === "form"
-    ? { n: 2, title: "Destinos e restrições da viagem" }
-    : { n: 3, title: "Roteiro gerado" };
+    ? { n: 3, title: "Destinos e restrições da viagem" }
+    : { n: 4, title: "Roteiro gerado" };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -68,6 +71,8 @@ export function Planner() {
 
       {view === "list" ? (
         <TripList trips={trips} onOpen={openSavedTrip} onCreate={createTrip} />
+      ) : view === "start" ? (
+        <StartStep trip={trip} onChange={setTrip} onNext={() => setView("form")} />
       ) : view === "form" ? (
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <aside className="w-full shrink-0 overflow-y-auto border-b bg-card md:w-[420px] md:border-r md:border-b-0">
@@ -75,6 +80,7 @@ export function Planner() {
               trip={trip}
               onChange={setTrip}
               totalDays={itinerary.totals.days}
+              cost={itinerary.cost}
               onGenerate={generate}
             />
           </aside>
@@ -87,7 +93,7 @@ export function Planner() {
           <ItineraryHeader trip={trip} itinerary={itinerary} onBack={() => setView("form")} />
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
             <div className="w-full shrink-0 overflow-y-auto border-b bg-card md:w-[460px] md:border-r md:border-b-0">
-              <Timeline itinerary={itinerary} activeIndex={activeIndex} onSelect={setActiveIndex} />
+              <Timeline trip={trip} itinerary={itinerary} activeIndex={activeIndex} onSelect={setActiveIndex} />
             </div>
             <div className="min-h-80 flex-1 bg-muted">
               <TripMap stops={itinerary.mapStops} legs={legs} activeIndex={activeIndex} routeStyle={trip.roadType.style} />

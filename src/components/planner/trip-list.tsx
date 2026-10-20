@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { buildItinerary, formatBRL, routeNames } from "@/lib/itinerary";
 import type { SavedTrip } from "@/lib/saved-trips";
 
 type Props = {
@@ -39,14 +40,15 @@ export function TripList({ trips, onOpen, onCreate }: Props) {
             >
               <div className="text-sm font-bold">{s.title}</div>
               <div className="text-xs text-muted-foreground">
-                {[s.trip.origin, ...s.trip.destinations.map((d) => d.name)].join(" → ")}
+                {routeNames(s.trip).join(" → ")}
               </div>
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {s.trip.pilots.length > 0 && (
-                  <Badge variant="secondary">{s.trip.pilots.length + 1} perfis de piloto</Badge>
+                  <Badge variant="secondary">{s.trip.pilots.length + 1} perfis de motorista</Badge>
                 )}
                 {s.trip.beginnerMode && <Badge variant="secondary">Modo iniciante</Badge>}
                 <Badge variant="outline">{channelLabel[s.trip.notifyChannel]}</Badge>
+                <Badge variant="outline">~{formatBRL(buildItinerary(s.trip).cost.total)}</Badge>
               </div>
             </Card>
           ))}
