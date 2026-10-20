@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ type Props = {
   onGenerate: () => void;
 };
 
-const segmentedItem = "flex-1 aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+const segmentedItem = "h-auto min-h-8 flex-1 whitespace-normal py-1.5 text-center aria-pressed:bg-primary aria-pressed:text-primary-foreground";
 
 function Segmented<T extends string>({ value, options, onChange }: {
   value: T; options: { value: T; label: string }[]; onChange: (v: T) => void;
@@ -55,13 +55,14 @@ const STOP_NEEDS: { value: StopNeed; label: string; hint: string }[] = [
 function AddPilot({ onAdd }: { onAdd: (name: string, maxHours: number, maxKm: number) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [maxHours, setMaxHours] = useState("6");
-  const [maxKm, setMaxKm] = useState("450");
+  const [maxHours, setMaxHours] = useState("");
+  const [maxKm, setMaxKm] = useState("");
 
-  function reset() { setOpen(false); setName(""); setMaxHours("6"); setMaxKm("450"); }
+  const valid = name.trim() && parseInt(maxHours) > 0 && parseInt(maxKm) > 0;
+  function reset() { setOpen(false); setName(""); setMaxHours(""); setMaxKm(""); }
   function confirm() {
-    if (!name.trim()) return;
-    onAdd(name.trim(), Math.max(1, parseInt(maxHours) || 6), Math.max(50, parseInt(maxKm) || 450));
+    if (!valid) return;
+    onAdd(name.trim(), Math.max(1, parseInt(maxHours)), Math.max(50, parseInt(maxKm)));
     reset();
   }
 
@@ -76,26 +77,34 @@ function AddPilot({ onAdd }: { onAdd: (name: string, maxHours: number, maxKm: nu
     <div className="flex flex-col gap-2 rounded-lg bg-muted p-3">
       <Input autoFocus placeholder="Nome (ex.: Ana)" value={name} onChange={(e) => setName(e.target.value)} />
       <div className="flex gap-2">
-        <Input placeholder="Horas máx./dia" inputMode="numeric" value={maxHours} onChange={(e) => setMaxHours(e.target.value)} />
-        <Input placeholder="Km máx./dia" inputMode="numeric" value={maxKm} onChange={(e) => setMaxKm(e.target.value)} />
+        <div className="flex-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">Horas de direção por dia</Label>
+          <Input inputMode="numeric" placeholder="ex.: 6" value={maxHours} onChange={(e) => setMaxHours(e.target.value)} />
+        </div>
+        <div className="flex-1 space-y-1">
+          <Label className="text-xs text-muted-foreground">Quilômetros por dia</Label>
+          <Input inputMode="numeric" placeholder="ex.: 450" value={maxKm} onChange={(e) => setMaxKm(e.target.value)} />
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">Quanto essa pessoa aguenta dirigir em um dia, no máximo.</p>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={reset}>Cancelar</Button>
-        <Button size="sm" onClick={confirm}>Adicionar</Button>
+        <Button size="sm" disabled={!valid} onClick={confirm}>Adicionar</Button>
       </div>
     </div>
   );
 }
 
-function AddDestination({ onAdd }: { onAdd: (name: string, days: number) => void }) {
+function AddDestination({ onAdd }: { onAdd: (name: string, days: number, address?: string) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [days, setDays] = useState("2");
+  const [address, setAddress] = useState("");
 
-  function reset() { setOpen(false); setName(""); setDays("2"); }
+  function reset() { setOpen(false); setName(""); setDays("2"); setAddress(""); }
   function confirm() {
     if (!name.trim()) return;
-    onAdd(name.trim(), Math.max(1, parseInt(days) || 1));
+    onAdd(name.trim(), Math.max(1, parseInt(days) || 1), address.trim() || undefined);
     reset();
   }
 
@@ -110,7 +119,15 @@ function AddDestination({ onAdd }: { onAdd: (name: string, days: number) => void
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-muted p-3">
       <CityInput autoFocus value={name} onChange={setName} />
-      <Input placeholder="Dias de permanência" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Quantos dias você fica aqui?</Label>
+        <Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Endereço da hospedagem (opcional)</Label>
+        <Input placeholder="Rua, número, bairro" value={address} onChange={(e) => setAddress(e.target.value)} />
+        <p className="text-[11px] text-muted-foreground">Usado para abrir a rota direto no Google Maps ou no Waze.</p>
+      </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={reset}>Cancelar</Button>
         <Button size="sm" onClick={confirm}>Adicionar</Button>
@@ -125,10 +142,13 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
     set({ destinations: trip.destinations.map((d, i) => (i === idx ? { ...d, days } : d)) });
   const move = (idx: number, to: number) => {
     if (to < 0 || to >= trip.destinations.length) return;
+    if (idx === to) return;
     const next = [...trip.destinations];
-    [next[idx], next[to]] = [next[to], next[idx]];
+    next.splice(to, 0, next.splice(idx, 1)[0]);
     set({ destinations: next });
   };
+  const multi = trip.destinations.length > 1;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
   const one = (v: number | readonly number[]) => (Array.isArray(v) ? v[0] : (v as number));
 
   return (
@@ -147,21 +167,33 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
         </Label>
         <div className="flex flex-col gap-2">
           {trip.destinations.map((d, idx) => (
-            <div key={d.name + idx} className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2">
+            <div
+              key={d.name + idx}
+              draggable={multi}
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => multi && dragIdx !== null && e.preventDefault()}
+              onDrop={() => { if (dragIdx !== null) move(dragIdx, idx); setDragIdx(null); }}
+              onDragEnd={() => setDragIdx(null)}
+              className={`flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 ${dragIdx === idx ? "opacity-50" : ""}`}
+            >
+              {multi && <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" aria-hidden />}
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">{idx + 1}</span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{d.name}</div>
-                <div className="text-xs text-muted-foreground">Permanência: {d.days} {d.days === 1 ? "dia" : "dias"}</div>
+                <div className="text-xs text-muted-foreground">Ficar {d.days} {d.days === 1 ? "dia" : "dias"} aqui</div>
+                {d.address && <div className="truncate text-xs text-muted-foreground">{d.address}</div>}
               </div>
               <div className="flex items-center gap-1 rounded-md bg-muted px-1">
                 <Button size="icon-xs" variant="ghost" aria-label="Menos um dia" onClick={() => d.days > 1 && setDest(idx, d.days - 1)}>–</Button>
-                <span className="w-4 text-center text-xs font-bold">{d.days}</span>
+                <span className="min-w-8 text-center text-xs font-bold">{d.days} {d.days === 1 ? "dia" : "dias"}</span>
                 <Button size="icon-xs" variant="ghost" aria-label="Mais um dia" onClick={() => setDest(idx, d.days + 1)}>+</Button>
               </div>
-              <div className="flex flex-col">
-                <Button size="icon-xs" variant="ghost" aria-label="Mover para cima" onClick={() => move(idx, idx - 1)}><ArrowUp /></Button>
-                <Button size="icon-xs" variant="ghost" aria-label="Mover para baixo" onClick={() => move(idx, idx + 1)}><ArrowDown /></Button>
-              </div>
+              {multi && (
+                <div className="flex flex-col">
+                  <Button size="icon-xs" variant="ghost" aria-label="Mover para cima" onClick={() => move(idx, idx - 1)}><ArrowUp /></Button>
+                  <Button size="icon-xs" variant="ghost" aria-label="Mover para baixo" onClick={() => move(idx, idx + 1)}><ArrowDown /></Button>
+                </div>
+              )}
               <Button
                 size="icon-xs" variant="ghost" aria-label="Remover destino"
                 className="hover:text-destructive"
@@ -170,7 +202,22 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
             </div>
           ))}
         </div>
-        <AddDestination onAdd={(name, days) => set({ destinations: [...trip.destinations, { name, days }] })} />
+        <AddDestination onAdd={(name, days, address) => set({ destinations: [...trip.destinations, { name, days, address }] })} />
+      </section>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Hospedagem (opcional)</Label>
+        <Input
+          placeholder="Diária média, em R$ (ex.: 250)"
+          inputMode="numeric"
+          value={trip.lodgingPerNight || ""}
+          onChange={(e) => set({ lodgingPerNight: Math.max(0, parseInt(e.target.value.replace(/\D/g, "")) || 0) })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Valor de uma noite para o grupo todo.
+        </p>
       </section>
 
       <Separator />
@@ -206,8 +253,7 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
         />
         {trip.beginnerMode && (
           <p className="text-xs text-muted-foreground">
-            Modo iniciante ativado: termos técnicos do roteiro ficam com explicação extra e sugerimos abaixo um ritmo
-            confortável pra quem nunca fez uma viagem longa.
+            O roteiro vai explicar cada termo e sugerir um ritmo confortável.
           </p>
         )}
       </section>
@@ -216,6 +262,9 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
 
       <section className="space-y-4">
         <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Restrições da viagem</Label>
+        <p className="text-xs text-muted-foreground">
+          Quanto você aguenta dirigir por dia. Trechos maiores que isso são divididos em mais de um dia.
+        </p>
         <div className="space-y-2">
           <Label className="text-muted-foreground">Não sabe seu limite? Escolha um ritmo</Label>
           <div className="grid grid-cols-2 gap-2">
@@ -261,16 +310,17 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
             onChange={(v) => set({ restEveryHours: Number(v) })}
           />
           <p className="text-xs text-muted-foreground">
-            O roteiro conta as pausas (~15 min) no horário de chegada. Com bebê ou criança pequena, use 2h.
+            Cada pausa conta ~15 min. Com bebê ou criança pequena, use 2h.
           </p>
         </div>
         <div className="space-y-2">
           <Label className="text-muted-foreground">Pedágios</Label>
           <Segmented
             value={trip.avoidTolls ? "evitar" : "normal"}
-            options={[{ value: "normal", label: "Rota normal" }, { value: "evitar", label: "Evitar (mais barato, mais longo)" }]}
+            options={[{ value: "normal", label: "Rota normal" }, { value: "evitar", label: "Evitar pedágios" }]}
             onChange={(v) => set({ avoidTolls: v === "evitar" })}
           />
+          <p className="text-xs text-muted-foreground">Custa menos, mas a rota fica ~8% mais longa.</p>
         </div>
         <div className="space-y-2">
           <Label className="text-muted-foreground">Pavimento preferido</Label>
@@ -288,7 +338,8 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
             onChange={(style) => set({ roadType: { ...trip.roadType, style } })}
           />
           <p className="text-xs text-muted-foreground">
-            &quot;Terra&quot; é só preferência de exibição neste protótipo — a rota real ainda usa vias pavimentadas.
+            Cênica: prefere trechos com paisagem bonita, mesmo que demore um pouco mais. &quot;Terra&quot; é só preferência
+            neste protótipo: a rota ainda usa vias pavimentadas.
           </p>
         </div>
       </section>
@@ -315,19 +366,23 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          Protótipo: o roteiro lista esses critérios em cada pausa — ainda não há base real de estabelecimentos.
+          Hoje o roteiro mostra o que procurar em cada trecho. Nomes de lugares reais ainda não estão disponíveis.
         </p>
       </section>
 
       <Separator />
 
+      <details className="group rounded-lg border bg-card">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold marker:hidden">
+          Mais opções <span className="font-normal text-muted-foreground">(motoristas, segurança, alertas)</span>
+        </summary>
+        <div className="flex flex-col gap-5 border-t p-3">
       <section className="space-y-2">
         <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
-          Quem dirige (opcional)
+          Motoristas com limites diferentes (opcional)
         </Label>
         <p className="text-xs text-muted-foreground">
-          Cada pessoa ou moto/carro com resistência diferente? Cadastre o limite de cada um — vale para grupo, casal ou
-          revezamento. O roteiro sempre usa o mais conservador e avisa quem está puxando o limite.
+          Só preencha se mais de uma pessoa dirige e cada uma aguenta um tanto diferente. O roteiro usa o menor limite.
         </p>
         {trip.pilots.length > 0 && (
           <div className="flex flex-col gap-2">
@@ -354,7 +409,7 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
       <section className="space-y-2">
         <Label className="text-xs font-bold tracking-wider text-muted-foreground uppercase">Segurança (opcional)</Label>
         <p className="text-xs text-muted-foreground">
-          Contato de confiança para o botão de emergência (envia sua localização por WhatsApp).
+          Contato de confiança para o botão de emergência.
         </p>
         <Input
           placeholder="Nome do contato"
@@ -369,7 +424,7 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
         />
         <Segmented
           value={trip.emergency.checkIn ? "sim" : "nao"}
-          options={[{ value: "nao", label: "Sem confirmação" }, { value: "sim", label: "Avisar se eu não chegar" }]}
+          options={[{ value: "nao", label: "Só o botão de emergência" }, { value: "sim", label: "Avisar se eu não chegar" }]}
           onChange={(v) => set({ emergency: { ...trip.emergency, checkIn: v === "sim" } })}
         />
       </section>
@@ -389,10 +444,10 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
           options={[{ value: "essenciais", label: "Só essenciais" }, { value: "resumo", label: "Resumo diário" }, { value: "todos", label: "Todos" }]}
           onChange={(notifyLevel) => set({ notifyLevel })}
         />
-        <p className="text-xs text-muted-foreground">
-          Protótipo: só salva a preferência — nenhum alerta é enviado de fato.
-        </p>
+        <p className="text-xs text-muted-foreground">Protótipo: nenhum alerta é enviado de fato.</p>
       </section>
+        </div>
+      </details>
 
       <Separator />
 
@@ -417,7 +472,7 @@ export function TripForm({ trip, onChange, totalDays, cost, onGenerate }: Props)
 
       {trip.destinations.length > 0 && (
         <div className="rounded-lg bg-accent px-3 py-2.5">
-          <div className="text-xs text-muted-foreground">Custo estimado (combustível + pedágio)</div>
+          <div className="text-xs text-muted-foreground">Custo estimado</div>
           <div className="text-base font-extrabold">
             {formatBRL(cost.total)}{" "}
             <span className="text-xs font-medium text-muted-foreground">· {formatBRL(cost.perPerson)} por pessoa</span>

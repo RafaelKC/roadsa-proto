@@ -51,8 +51,9 @@ src/
 - `buildItinerary()` em `src/lib/itinerary.ts` é o motor. **Não mova lógica de negócio para o mapa**; o mapa apenas desenha o resultado.
 - Por trecho: `effectiveMaxKm = max(80, min(maxKm, maxHours × 75 km/h))` e `dias = ceil(km / effectiveMaxKm)`.
   Trechos longos viram vários dias com **paradas sugeridas**.
-- Distâncias/paradas ainda são tabelas fixas (`DIST_TABLE`, `WAYPOINT_TABLE`) com fallback determinístico por hash —
-  placeholder de demo, a ser trocado por Directions API real.
+- Distâncias reais vêm do Directions (`getLegDistanceKm` em `mapbox.ts`, injetadas em `buildItinerary(state, distances)` pelo
+  `planner.tsx`). Sem resposta/token, o motor cai em `DIST_TABLE` e depois num hash determinístico (180–829 km, **errado de
+  propósito**: só placeholder) e a tela avisa que as distâncias são aproximadas. Paradas (`WAYPOINT_TABLE`) ainda são tabela fixa.
 - Escopo geográfico do MVP: **só Brasil**. Sem navegação in-app (só planejamento). Web desktop-first (≥ 1366×768).
 - **Manter o disclaimer** de estimativas na tela de roteiro ("Distâncias, tempos e paradas são estimativas…").
 - Tipo de estrada (asfalto/terra) é pós-MVP: o seletor "Pavimento" é só cosmético — não ampliar.

@@ -31,6 +31,11 @@ export function estimateCoords(name: string): LngLat {
   return [lng, lat];
 }
 
+// Só vale pedir rota ao Directions quando a cidade foi geocodificada de verdade (não o fallback por hash).
+export function isGeocoded(name: string): boolean {
+  return name in geocodeCache;
+}
+
 export function cacheCoords(name: string, coords: LngLat) {
   geocodeCache[name] = coords;
 }
@@ -71,12 +76,17 @@ export async function fetchCitySuggestions(query: string, signal?: AbortSignal):
 // ---------- Directions (trajeto real por trecho) ----------
 const directionsCache = new Map<string, Promise<LngLat[] | null>>();
 
-export function getRouteLeg(a: LngLat, b: LngLat, style: "rapida" | "cenica"): Promise<LngLat[] | null> {
-  const key = `${a}|${b}|${style}`;
+// "cênica" evita rodovias (exclude=motorway) — proxy razoável sem dado de tipo de via.
+function excludeParam(style: "rapida" | "cenica", avoidTolls: boolean): string {
+  const list = [style === "cenica" && "motorway", avoidTolls && "toll"].filter(Boolean);
+  return list.length ? `&exclude=${list.join(",")}` : "";
+}
+
+export function getRouteLeg(a: LngLat, b: LngLat, style: "rapida" | "cenica", avoidTolls = false): Promise<LngLat[] | null> {
+  const key = `${a}|${b}|${style}|${avoidTolls}`;
   let p = directionsCache.get(key);
   if (!p) {
-    // "cênica" evita rodovias (exclude=motorway) — proxy razoável sem dado de tipo de via.
-    const exclude = style === "cenica" ? "&exclude=motorway" : "";
+    const exclude = excludeParam(style, avoidTolls);
     p = MAPBOX_TOKEN
       ? fetchJson<{ routes?: { geometry: { coordinates: LngLat[] } }[] }>(
           `https://api.mapbox.com/directions/v5/mapbox/driving/${a};${b}` +
@@ -84,6 +94,24 @@ export function getRouteLeg(a: LngLat, b: LngLat, style: "rapida" | "cenica"): P
         ).then((d) => d?.routes?.[0]?.geometry.coordinates ?? null)
       : Promise.resolve(null);
     directionsCache.set(key, p);
+  }
+  return p;
+}
+
+// Distância real (km) do trecho — substitui as tabelas/hash do motor quando o Directions responde.
+const distanceCache = new Map<string, Promise<number | null>>();
+
+export function getLegDistanceKm(a: LngLat, b: LngLat, style: "rapida" | "cenica", avoidTolls: boolean): Promise<number | null> {
+  const key = `${a}|${b}|${style}|${avoidTolls}`;
+  let p = distanceCache.get(key);
+  if (!p) {
+    p = MAPBOX_TOKEN
+      ? fetchJson<{ routes?: { distance: number }[] }>(
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${a};${b}` +
+            `?overview=false${excludeParam(style, avoidTolls)}&access_token=${MAPBOX_TOKEN}`,
+        ).then((d) => (d?.routes?.[0] ? Math.round(d.routes[0].distance / 1000) : null))
+      : Promise.resolve(null);
+    distanceCache.set(key, p);
   }
   return p;
 }

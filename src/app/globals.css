@@ -131,7 +131,8 @@
 }
 
 /* Popups do Mapbox seguem o tema */
-.mapboxgl-popup-content {
+/* seletor mais específico: o CSS do mapbox-gl é carregado depois e sobrescreveria o fundo */
+.mapboxgl-popup .mapboxgl-popup-content {
   background: var(--popover);
   color: var(--popover-foreground);
   border-radius: var(--radius-md);

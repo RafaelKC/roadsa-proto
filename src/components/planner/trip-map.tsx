@@ -17,6 +17,7 @@ type Props = {
   legs: TravelItem[];
   activeIndex?: number;
   routeStyle: "rapida" | "cenica";
+  avoidTolls?: boolean;
   showControls?: boolean;
 };
 
@@ -58,7 +59,7 @@ function poiEl(category: PoiCategory): HTMLElement {
 
 function legPopupContent(p: Record<string, unknown>): HTMLElement {
   const root = document.createElement("div");
-  root.className = "min-w-32 text-xs text-foreground";
+  root.className = "min-w-32 text-xs";
   const line = (text: string, bold = false) => {
     const d = document.createElement("div");
     d.className = bold ? "mb-0.5 font-bold" : "mb-0.5";
@@ -72,7 +73,7 @@ function legPopupContent(p: Record<string, unknown>): HTMLElement {
   return root;
 }
 
-export function TripMap({ stops, legs, activeIndex = -1, routeStyle, showControls = false }: Props) {
+export function TripMap({ stops, legs, activeIndex = -1, routeStyle, avoidTolls = false, showControls = false }: Props) {
   const { resolvedTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -189,7 +190,7 @@ export function TripMap({ stops, legs, activeIndex = -1, routeStyle, showControl
 
     // linha reta imediata; troca pela estrada real quando a Directions API responder
     setFeatures(coords.slice(0, -1).map((c, i) => legFeature([c, coords[i + 1]], i, legs[i])));
-    Promise.all(coords.slice(0, -1).map((c, i) => getRouteLeg(c, coords[i + 1], routeStyle))).then((real) => {
+    Promise.all(coords.slice(0, -1).map((c, i) => getRouteLeg(c, coords[i + 1], routeStyle, avoidTolls))).then((real) => {
       if (cancelled) return;
       setFeatures(real.map((r, i) => legFeature(r?.length ? r : [coords[i], coords[i + 1]], i, legs[i])));
     });
@@ -220,7 +221,7 @@ export function TripMap({ stops, legs, activeIndex = -1, routeStyle, showControl
       cancelled = true;
       markers.forEach((m) => m.remove());
     };
-  }, [styleTick, coords, stops, legs, activeIndex, routeStyle]);
+  }, [styleTick, coords, stops, legs, activeIndex, routeStyle, avoidTolls]);
 
   if (!MAPBOX_TOKEN) {
     return (

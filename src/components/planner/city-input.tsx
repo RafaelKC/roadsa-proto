@@ -17,9 +17,12 @@ export function CityInput({ value, onChange, onEnter, placeholder = "Nome da cid
   const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [highlighted, setHighlighted] = useState(-1);
   const abortRef = useRef<AbortController | null>(null);
+  const pickedRef = useRef<string | null>(null); // valor vindo de uma seleção: não precisa buscar de novo
 
   useEffect(() => {
     abortRef.current?.abort();
+    if (pickedRef.current === value) return;
+    pickedRef.current = null;
     if (!value.trim()) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -32,6 +35,7 @@ export function CityInput({ value, onChange, onEnter, placeholder = "Nome da cid
 
   function pick(item: CitySuggestion) {
     cacheCoords(item.name, item.center); // já resolvida, sem geocodificar de novo
+    pickedRef.current = item.name;
     onChange(item.name);
     setSuggestions([]);
   }

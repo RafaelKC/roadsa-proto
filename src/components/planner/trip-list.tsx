@@ -4,13 +4,15 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { buildItinerary, formatBRL, routeNames } from "@/lib/itinerary";
+import { buildItinerary, formatBRL, routeNames, type Distances, type TripState } from "@/lib/itinerary";
 import type { SavedTrip } from "@/lib/saved-trips";
 
 type Props = {
   trips: SavedTrip[];
   onOpen: (trip: SavedTrip) => void;
   onCreate: () => void;
+  distancesFor: (trip: TripState) => Distances;
+  isExact: (trip: TripState) => boolean;
 };
 
 const channelLabel: Record<SavedTrip["trip"]["notifyChannel"], string> = {
@@ -19,10 +21,19 @@ const channelLabel: Record<SavedTrip["trip"]["notifyChannel"], string> = {
   telegram: "Alertas via Telegram",
 };
 
-export function TripList({ trips, onOpen, onCreate }: Props) {
+export function TripList({ trips, onOpen, onCreate, distancesFor, isExact }: Props) {
   return (
     <div className="flex-1 overflow-y-auto p-7">
       <div className="mx-auto flex max-w-3xl flex-col gap-5">
+        <div className="rounded-2xl bg-accent px-5 py-4">
+          <div className="text-base font-bold">Planeje sua road trip, dia a dia.</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Diga de onde você sai, para onde quer ir e quanto aguenta dirigir por dia. O RoadSA monta o roteiro com
+            paradas, horários e custo estimado, e recalcula tudo quando você muda algo. Você viaja com o seu próprio
+            carro ou moto: aqui só planejamos.
+          </p>
+        </div>
+
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold">Minhas rotas</h1>
@@ -48,7 +59,7 @@ export function TripList({ trips, onOpen, onCreate }: Props) {
                 )}
                 {s.trip.beginnerMode && <Badge variant="secondary">Modo iniciante</Badge>}
                 <Badge variant="outline">{channelLabel[s.trip.notifyChannel]}</Badge>
-                <Badge variant="outline">~{formatBRL(buildItinerary(s.trip).cost.total)}</Badge>
+                {isExact(s.trip) && <Badge variant="outline">~{formatBRL(buildItinerary(s.trip, distancesFor(s.trip)).cost.total)}</Badge>}
               </div>
             </Card>
           ))}

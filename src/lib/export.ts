@@ -2,7 +2,7 @@
 // (pedido de quem viaja sem sinal e de quem divide o roteiro com o grupo). Sem React.
 
 import {
-  addDaysToDate, formatBRL, formatDatePt, routeNames,
+  addDaysToDate, formatBRL, formatDatePt, routeNames, withPeriod,
   type Itinerary, type TripState,
 } from "@/lib/itinerary";
 
@@ -16,7 +16,7 @@ export function itineraryToText(trip: TripState, it: Itinerary): string {
   ];
   for (const x of it.items) {
     if (x.type === "travel") {
-      lines.push(`Dia ${x.day}: ${x.from.split(",")[0]} → ${x.to.split(",")[0]} · ${x.km} km · ${x.departure}–${x.arrival}`);
+      lines.push(`Dia ${x.day}: ${x.from.split(",")[0]} → ${x.to.split(",")[0]} · ${x.km} km · saída ${withPeriod(x.departure)}, chegada ~${withPeriod(x.arrival.replace(" (+1)", ""))}${x.arrival.includes("+1") ? " do dia seguinte" : ""}`);
     } else {
       const label = x.dayStart === x.dayEnd ? `Dia ${x.dayStart}` : `Dias ${x.dayStart}–${x.dayEnd}`;
       lines.push(`${label}: estadia em ${x.place.split(",")[0]}`);
@@ -51,6 +51,15 @@ export function downloadFile(name: string, content: string, mime: string) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// Links de navegação (só abrem o app; nada do Google é guardado). Com endereço de hospedagem, ele vira o destino.
+export function mapsUrl(from: string, to: string, address?: string): string {
+  const dest = address ? `${address}, ${to}` : to;
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from + ", Brasil")}&destination=${encodeURIComponent(dest + ", Brasil")}&travelmode=driving`;
+}
+export function wazeUrl(to: string, address?: string): string {
+  return `https://waze.com/ul?q=${encodeURIComponent((address ? `${address}, ${to}` : to) + ", Brasil")}&navigate=yes`;
 }
 
 // Número BR com DDD → só dígitos com 55 na frente; null se não parecer um telefone.

@@ -21,9 +21,11 @@ export function blankTrip(): TripState {
     vehicle: "carro",
     travelers: 1,
     avoidTolls: false,
+    lodgingPerNight: 0,
     restEveryHours: 0,
     stopNeeds: [],
     departureTime: "08:00",
+    departures: {},
     emergency: { name: "", phone: "", checkIn: false },
   };
 }

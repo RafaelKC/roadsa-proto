@@ -1,7 +1,7 @@
 // Motor de planejamento do roteiro. É a lógica de negócio do produto: o mapa
 // só VISUALIZA o que este módulo decide (ver AGENT.md). Sem dependência de React/Mapbox.
 
-export type Destination = { name: string; days: number };
+export type Destination = { name: string; days: number; address?: string }; // address: hospedagem (opcional), usada nos links de navegação
 
 // Perfil individual de piloto/moto — grupos com resistência diferente por pessoa
 // podem cadastrar mais de um; o limite efetivo do grupo é sempre o mais conservador.
@@ -30,9 +30,11 @@ export type TripState = {
   vehicle: Vehicle;
   travelers: number; // pessoas que dividem o custo
   avoidTolls: boolean;
+  lodgingPerNight: number; // diária média (R$, total do grupo); 0 = não informado
   restEveryHours: number; // 0 = sem pausas fixas
   stopNeeds: StopNeed[];
-  departureTime: string; // HH:MM
+  departureTime: string; // HH:MM padrão de todos os dias
+  departures: Record<number, string>; // saída específica por dia (número do dia → HH:MM)
   emergency: Emergency;
 };
 
@@ -69,7 +71,7 @@ export type ItineraryItem = TravelItem | StayItem;
 // `generic`: parada sem cidade real (placeholder) — o mapa a posiciona entre as vizinhas, sem geocodificar.
 export type MapStop = { name: string; kind: "origin" | "destino" | "parada"; generic?: boolean };
 
-export type Cost = { fuel: number; toll: number; total: number; perPerson: number; perDay: number };
+export type Cost = { fuel: number; toll: number; lodging: number; total: number; perPerson: number; perDay: number };
 
 export type Itinerary = {
   items: ItineraryItem[];
@@ -91,7 +93,7 @@ export const COST_ASSUMPTIONS = {
   kmPerLiter: { carro: 12, moto: 25 } as Record<Vehicle, number>,
   fuelPrice: 6.3,
   tollPerKm: { carro: 0.09, moto: 0.045 } as Record<Vehicle, number>,
-  tollDetourFactor: 1.08, // "evitar pedágios" alonga o caminho em ~8%
+  tollDetourFactor: 1.08, // só no fallback sem Directions: "evitar pedágios" alonga o caminho em ~8%
 };
 
 export const DEFAULT_TRIP: TripState = {
@@ -113,9 +115,11 @@ export const DEFAULT_TRIP: TripState = {
   vehicle: "carro",
   travelers: 2,
   avoidTolls: false,
+  lodgingPerNight: 0,
   restEveryHours: 0,
   stopNeeds: [],
   departureTime: "08:00",
+  departures: {},
   emergency: { name: "", phone: "", checkIn: false },
 };
 
@@ -141,8 +145,13 @@ function estimateKm(a: string, b: string): number {
   return 180 + (hashStr(a + "|" + b) % 650);
 }
 
-function getDistance(a: string, b: string, avoidTolls: boolean): number {
-  const km = DIST_TABLE[a + "|" + b] ?? estimateKm(a, b);
+// Distâncias reais (Directions) por "origem|destino"; quando faltam, cai na tabela fixa e depois no hash.
+export type Distances = Record<string, number>;
+
+function getDistance(a: string, b: string, avoidTolls: boolean, real?: Distances): number {
+  const key = a + "|" + b;
+  if (real?.[key] != null) return real[key];
+  const km = DIST_TABLE[key] ?? estimateKm(a, b);
   return avoidTolls ? Math.round(km * COST_ASSUMPTIONS.tollDetourFactor) : km;
 }
 
@@ -152,6 +161,18 @@ function formatClock(totalMinutes: number): string {
   const hh = String(Math.floor(m / 60)).padStart(2, "0");
   const mm = String(m % 60).padStart(2, "0");
   return `${hh}:${mm}${day > 0 ? " (+1)" : ""}`;
+}
+
+// "11:00" → "11:00 (manhã)": evita dúvida entre manhã e tarde.
+export function withPeriod(clock: string): string {
+  const h = Number(clock.slice(0, 2));
+  const period = h < 6 ? "madrugada" : h < 12 ? "manhã" : h < 18 ? "tarde" : "noite";
+  return `${clock} (${period})`;
+}
+
+function parseClock(value: string | undefined, fallback: number): number {
+  const m = value ? /^(\d{1,2}):(\d{2})$/.exec(value) : null;
+  return m ? Number(m[1]) * 60 + Number(m[2]) : fallback;
 }
 
 export function formatBRL(n: number): string {
@@ -169,7 +190,7 @@ export function routeNames(state: TripState): string[] {
   return state.roundTrip && state.destinations.length ? [...names, state.origin] : names;
 }
 
-export function buildItinerary(state: TripState): Itinerary {
+export function buildItinerary(state: TripState, distances?: Distances): Itinerary {
   const chain = routeNames(state);
   const items: ItineraryItem[] = [];
   const mapStops: MapStop[] = [{ name: state.origin, kind: "origin" }];
@@ -178,8 +199,7 @@ export function buildItinerary(state: TripState): Itinerary {
   let totalHours = 0;
   let fuelTotal = 0;
   let tollTotal = 0;
-  const dep = /^(\d{1,2}):(\d{2})$/.exec(state.departureTime);
-  const departMinutes = dep ? Number(dep[1]) * 60 + Number(dep[2]) : 8 * 60;
+  const defaultDeparture = parseClock(state.departureTime, 8 * 60);
   const { kmPerLiter, fuelPrice, tollPerKm } = COST_ASSUMPTIONS;
 
   // Com mais de um piloto/moto cadastrado, o limite do grupo é o mais conservador entre eles.
@@ -199,7 +219,7 @@ export function buildItinerary(state: TripState): Itinerary {
   for (let i = 0; i < chain.length - 1; i++) {
     const from = chain[i];
     const to = chain[i + 1];
-    const km = getDistance(from, to, state.avoidTolls);
+    const km = getDistance(from, to, state.avoidTolls, distances);
     const effectiveMaxKm = Math.max(80, Math.min(groupMaxKm, groupMaxHours * SPEED_KMH));
     const numDays = Math.max(1, Math.ceil(km / effectiveMaxKm));
     const perDayKm = km / numDays;
@@ -211,6 +231,7 @@ export function buildItinerary(state: TripState): Itinerary {
       const segTo = isLast ? to : waypoints[d];
       const segKm = Math.round(perDayKm);
       const segHours = +(segKm / SPEED_KMH).toFixed(1);
+      const departMinutes = parseClock(state.departures[dayCounter], defaultDeparture);
       const restStops = state.restEveryHours > 0 ? Math.max(0, Math.ceil(segHours / state.restEveryHours) - 1) : 0;
       const fuelCost = (segKm / kmPerLiter[state.vehicle]) * fuelPrice;
       const tollCost = state.avoidTolls ? 0 : segKm * tollPerKm[state.vehicle];
@@ -245,12 +266,13 @@ export function buildItinerary(state: TripState): Itinerary {
   }
 
   const days = dayCounter - 1;
-  const total = fuelTotal + tollTotal;
+  const lodging = Math.max(0, days - 1) * Math.max(0, state.lodgingPerNight); // 1 noite por dia, menos o último
+  const total = fuelTotal + tollTotal + lodging;
   const travelers = Math.max(1, state.travelers);
   return {
     items, mapStops,
     totals: { km: totalKm, days, hours: Math.round(totalHours) },
-    cost: { fuel: fuelTotal, toll: tollTotal, total, perPerson: total / travelers, perDay: days ? total / days : 0 },
+    cost: { fuel: fuelTotal, toll: tollTotal, lodging, total, perPerson: total / travelers, perDay: days ? total / days : 0 },
     limitedBy,
   };
 }
